@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.2.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+<link rel="stylesheet" href="//fonts.googleapis.com/css?family=Monda:300,300italic,400,400italic,700,700italic|Roboto Slab:300,300italic,400,400italic,700,700italic&display=swap&subset=latin,latin-ext">
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"yoursite.com","root":"/","scheme":"Pisces","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="进程在命名空间中有一个唯一的进程ID号，由于进程可能在多个命名空间可见，所以他会有多个PID。进程还有其他的ID：  TGID，处于某个线程组的所有进程都有统一的线程组ID。进程task_struct的group_leader指向的进程中包含了TGID的信息，实际上就是group_leader的PID。 PGID，进程组ID。进程组简化了向组的所有成员发信号的操作，用管道连接的进程包含在同一个进程">
+<meta property="og:type" content="article">
+<meta property="og:title" content="进程ID管理">
+<meta property="og:url" content="http://yoursite.com/2020/05/31/%E8%BF%9B%E7%A8%8BID%E7%AE%A1%E7%90%86/index.html">
+<meta property="og:site_name" content="MyBlog">
+<meta property="og:description" content="进程在命名空间中有一个唯一的进程ID号，由于进程可能在多个命名空间可见，所以他会有多个PID。进程还有其他的ID：  TGID，处于某个线程组的所有进程都有统一的线程组ID。进程task_struct的group_leader指向的进程中包含了TGID的信息，实际上就是group_leader的PID。 PGID，进程组ID。进程组简化了向组的所有成员发信号的操作，用管道连接的进程包含在同一个进程">
+<meta property="og:image" content="https://pic-1302206658.cos.ap-shanghai.myqcloud.com/namespace.png">
+<meta property="og:image" content="https://pic-1302206658.cos.ap-shanghai.myqcloud.com/pidhlist.png">
+<meta property="og:image" content="https://pic-1302206658.cos.ap-shanghai.myqcloud.com/hashtable.png">
+<meta property="article:published_time" content="2020-05-31T02:51:08.000Z">
+<meta property="article:modified_time" content="2020-05-31T02:57:47.033Z">
+<meta property="article:author" content="myh">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://pic-1302206658.cos.ap-shanghai.myqcloud.com/namespace.png">
+
+<link rel="canonical" href="http://yoursite.com/2020/05/31/%E8%BF%9B%E7%A8%8BID%E7%AE%A1%E7%90%86/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome : false,
+    isPost : true,
+    lang   : 'zh-Hans'
+  };
+</script>
+
+  <title>进程ID管理 | MyBlog</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <h1 class="site-title">MyBlog</h1>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+    </div>
+  </div>
+</div>
+
+
+
+
+<nav class="site-nav">
+  <ul id="menu" class="main-menu menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a>
+
+  </li>
+  </ul>
+</nav>
+
+
+
+
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content post posts-expand">
+            
+
+    
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-Hans">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2020/05/31/%E8%BF%9B%E7%A8%8BID%E7%AE%A1%E7%90%86/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="myh">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="MyBlog">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          进程ID管理
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2020-05-31 10:51:08 / 修改时间：10:57:47" itemprop="dateCreated datePublished" datetime="2020-05-31T10:51:08+08:00">2020-05-31</time>
+            </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-folder"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Linux/" itemprop="url" rel="index"><span itemprop="name">Linux</span></a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>进程在命名空间中有一个唯一的进程ID号，由于进程可能在多个命名空间可见，所以他会有多个PID。进程还有其他的ID：</p>
+<ul>
+<li>TGID，处于某个线程组的所有进程都有统一的线程组ID。进程task_struct的group_leader指向的进程中包含了TGID的信息，实际上就是group_leader的PID。</li>
+<li>PGID，进程组ID。进程组简化了向组的所有成员发信号的操作，用管道连接的进程包含在同一个进程组中。进程task_struct的group_leader指向的进程中包含了PGID的信息。</li>
+<li>SID，多个进程组可以合并成一个会话，会话中所有进程有同样的会话ID。进程task_struct的group_leader指向的进程中包含了SID的信息。</li>
+</ul>
+<p>在内核中，这些ID统一用<code>struct pid</code>，需要注意的是它不仅仅能表示PID，尽管他们同名。后面再详细介绍该数据结构，先来看看各进程(task_struct)是如何会去找到自己的各类型的ID的。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">&lt;kernel&#x2F;include&#x2F;sched.h&gt;</span><br><span class="line">struct task_struct &#123;</span><br><span class="line">    ...</span><br><span class="line">    struct pid_link  pids[PIDTYPE_MAX];</span><br><span class="line">    ...</span><br><span class="line">&#125;</span><br><span class="line">&#x2F;*kernel&#x2F;include&#x2F;pid.h*&#x2F;</span><br><span class="line">struct pid_link &#123;</span><br><span class="line">    struct hlist_node node;</span><br><span class="line">    struct *pid;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>task_struct中pids[]数组，针对PID，PGID和SID类型都有一个struct pid_link类型的元素，没有TGID是因为它就是group_leader的PID。struct pid_link的pid成员指向了进程的ID。<br>获取进程的PID：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">&lt;sched.h&gt;</span><br><span class="line">static inline struct pid *task_pid(struct task_struct *task)</span><br><span class="line">&#123;</span><br><span class="line">    return task-&gt;pids[PIDTYPE_PID].pid;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>获取进程的TGID：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">static inline struct pid *task_tgid(struct task_struct *task)</span><br><span class="line">&#123;</span><br><span class="line">    return task-&gt;group_leader-&gt;pids[PIDTYPE_PID].pid;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>获取进程的PGID：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">static inline struct pid *task_pgrp(struct task_struct *task)</span><br><span class="line">&#123;</span><br><span class="line">    return task-&gt;group_leader-&gt;pids[PIDTYPE_PGID].pid;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>获取进程的SID：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">static inline struct pid *task_session(struct task_struct *task)</span><br><span class="line">&#123;</span><br><span class="line">    return task-&gt;group_leader-&gt;pids[PIDTYPE_SID].pid;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>struct pid</code>结构的定义如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">&lt;pid.h&gt;</span><br><span class="line">struct upid &#123;</span><br><span class="line">    int nr;</span><br><span class="line">    struct pid_namespace *ns;</span><br><span class="line">    struct hlist_node pid_chain;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line">struct pid</span><br><span class="line">&#123;</span><br><span class="line">    atomic_t count;</span><br><span class="line">    &#x2F;* 使用该pid的进程的列表 *&#x2F;</span><br><span class="line">    struct hlist_head tasks[PIDTYPE_MAX];</span><br><span class="line">    int level;</span><br><span class="line">    struct upid numbers[1];</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>进程ID的管理围绕这两个数据结构展开，tasks数组的元素是散列表头，链接的是所有共享该ID的进程，进程是通过前面struct pid_link中的node链接进来的，这样通过task_struct结构和pid_type(是个enum类型，取值有PID，PGID和SID)可以找到struct pid（前面已经介绍），通过pid_type和pid也可以找到task_struct：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">struct task_struct *pid_task(struct pid *pid, enum pid_type type)</span><br><span class="line">&#123;</span><br><span class="line">    struct task_struct *result &#x3D; NULL;</span><br><span class="line">    if (pid) &#123;</span><br><span class="line">        struct hlist_node *first;</span><br><span class="line">        first &#x3D; rcu_dereference_check(hlist_first_rcu(&amp;pid-&gt;tasks[type]),</span><br><span class="line">                                lockdep_tasklist_lock_is_held());</span><br><span class="line">       if (first)</span><br><span class="line">            result &#x3D; hlist_entry(first, struct task_struct, pids[(type)].node);</span><br><span class="line">    &#125;</span><br><span class="line">    return reuslt;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这里返回pid-&gt;tasks链表第一个节点的task_struct，为什么返回第一个节点呢？这里的理解是，要先弄明白为什么会有多个进程共享一个ID呢？因为PGRD对于属于该进程组的所有进程来说都是一样，这样表示PGRD的struct pid就会在tasks链接上多个task_struct，第一个是组长进程？<br>以上都是struct pid和struct task_struct之间的关联，实际上struct pid还维护了数值pid，也就是用户空间所看到的。一个struct pid可能对应多个数值pid，因为linux内核2.6的某个版本之后引入命名空间的概念：</p>
+<img src="https://pic-1302206658.cos.ap-shanghai.myqcloud.com/namespace.png"/>
+
+<p>如上图所示，尽管系统上有9个进程，但却需要15个PID来表示，因为一个进程可以关联到多个PID。至于那个是“正确”的，则依赖于具体的上下文。命名空间的结构体摘要：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">&lt;pid_namespace.h&gt;</span><br><span class="line"></span><br><span class="line">struct pid_namespace &#123;</span><br><span class="line">    ...</span><br><span class="line">    struct task_struct *child_reaper;</span><br><span class="line">    ...</span><br><span class="line">    int level;</span><br><span class="line">    struct pid_namespace *parent;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>其中level用来表示当前命名空间在命名空间层次结构中的深度。初始命名空间的level为0，它的子空间level为1，依此递推。level较高的命名空间中的PID对level较低的命名空间来说是可见的；没个命名空间都有一个进程，作用类似于全局的init进程，init的一个目的是对孤儿进程调用wait4，child_reaper指向子命名空间中承担该功能的进程；parent指针用来把命名空间层次化。<br>前面struct pid结构中还有几个成员没介绍，level用于指明该pid关联的命名空间level的最大值；对于每个命名空间都有一个struct upid结构与其对应，在struct pid结构中形成一个数组numbers。<br>struct upid中nr表示ID的数值(终于找到它了==!)，ns指向该ID所属的命名空间。pid_chain作为一个散列表节点，把upid链接进散列表中，关于该散列表，后面再详述。</p>
+<img src="https://pic-1302206658.cos.ap-shanghai.myqcloud.com/pidhlist.png"/>
+
+<p>前面struct pid和struct task_struct之间的关系涉及的示意图如上图蓝色部分。struct pid，数值pid和命名空间的示意图如上图黑色部分。<br>由struct pid和struct pid_namespace获取数值pid：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">&lt;kernel&#x2F;pid.c&gt;</span><br><span class="line">pid_t pid_nr_ns(struct pid *pid, struct pid_namespace *ns)</span><br><span class="line"></span><br><span class="line">&#123;</span><br><span class="line">    sturct upid *upid;</span><br><span class="line">    pid_t nr &#x3D; 0;</span><br><span class="line">    </span><br><span class="line">    if (pid &amp;&amp; ns-&gt;level &lt;&#x3D; pid-&gt;level) &#123;</span><br><span class="line">        upid &#x3D; &amp;pid-&gt;numbers[ns-&gt;level];</span><br><span class="line">        if (upid-&gt;ns &#x3D;&#x3D; ns)</span><br><span class="line">            nr &#x3D; upid-&gt;nr;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>由数值pid和struct pid_namespace获取struct pid：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">&lt;kernel&#x2F;pid.c&gt;</span><br><span class="line">struct pid * fastcall find_pid_ns(int nr, struct pid_namespace *ns)</span><br><span class="line">&#123;</span><br><span class="line">    struct upid *pnr;</span><br><span class="line">    hlist_for_each_entry_rcu(pnr,</span><br><span class="line">            &amp;pid_hash[pid_hasfn(nr, ns)], pid_chain)</span><br><span class="line">            if (pnr-&gt;nr &#x3D;&#x3D; nr &amp;&amp; pnr-&gt;ns &#x3D;&#x3D; ns)</span><br><span class="line">                return container_of(pnr, struct pid,</span><br><span class="line">                            numbers[ns-&gt;level]);</span><br><span class="line"></span><br><span class="line">    return NULL;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这里用到了pid.c中的一个全局静态变量：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">static struct hlist_head *pid_hash;</span><br></pre></td></tr></table></figure>
+
+<p>前面提到struct upid的pid_chain作用是把upid链接进散列表中，就是连接到pid_hash的。pid_hash是一个hlist_head数组，它是在pidhash_init()方法中初始化并分配内存的，可以在该方法中找到计算数组大小的方法，通过内核log可以看到实际结果：</p>
+<img src="https://pic-1302206658.cos.ap-shanghai.myqcloud.com/hashtable.png"/>
+
+<p>可以看到，该系统中pid_hash数组有4096个元素。<br>upid经过pid_hasfn运算后，插入到pid_hash[pid_hasfn(nr, ns)]散列表，所有经过pid_hasfn运算后值一样的upid通过链表链接起来。<br>内核还提供了很多接口：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">&lt;sched.h&gt;</span><br><span class="line">&#x2F;** the helpers to get the task&#39;s different pids as they are seen</span><br><span class="line">* from various namespaces</span><br><span class="line">*</span><br><span class="line">* task_xid_nr() : global id, i.e. the id seen from the init namespace;</span><br><span class="line">* task_xid_vnr() : virtual id, i.e. the id seen from the pid namespace of</span><br><span class="line">* current.</span><br><span class="line">* task_xid_nr_ns() : id seen from the ns specified;</span><br><span class="line">*</span><br><span class="line">* see also pid_nr() etc in include&#x2F;linux&#x2F;pid.h</span><br><span class="line">*&#x2F;</span><br></pre></td></tr></table></figure>
+
+<p>xid表示pid，pgrp和session，vnr是指从current进程所属的命名空间看task的pid_t是多少，nr_ns会指定命名空间。<br>他们都会调用：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">&lt;kernel&#x2F;pid.c&gt;</span><br><span class="line">pid_t __task_pid_nr_ns(struct task_struct *task, enum pid_type type,</span><br><span class="line">                            struct pid_namespace *ns)</span><br><span class="line">&#123;</span><br><span class="line">         pid_t nr &#x3D; 0;</span><br><span class="line"></span><br><span class="line">         rcu_read_lock();</span><br><span class="line">         if (!ns)</span><br><span class="line">                   ns &#x3D; task_active_pid_ns(current);</span><br><span class="line">         if (likely(pid_alive(task)))</span><br><span class="line">                   nr &#x3D; pid_nr_ns(rcu_dereference(*task_pid_ptr(task, type)), ns);</span><br><span class="line">         rcu_read_unlock();</span><br><span class="line"></span><br><span class="line">         return nr;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>不同的xid传递的type不同，vnr传递的ns为NULL，__task_pid_nr_ns会找到current的命令空间。task_active_pid_ns的实现，首先使用前面介绍的task_pid找到他的pid，然后用下面的方法返回pid的命名空间，这里要注意，pid是有一个命名空间数组的，那么返回哪个呢？这里返回的是最底层的，即最后一个：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">&lt;pid.h&gt;</span><br><span class="line">static inline struct pid_namespace *ns_of_pid(struct pid *pid)</span><br><span class="line">&#123;</span><br><span class="line">         struct pid_namespace *ns &#x3D; NULL;</span><br><span class="line">         if (pid)</span><br><span class="line">                   ns &#x3D; pid-&gt;numbers[pid-&gt;level].ns;</span><br><span class="line">         return ns;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>pid.h中的pid_nr和pid_vnr分别返回初始命名空间和current命名空间看的数值pid：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">static inline pid_t pid_nr(struct pid *pid)</span><br><span class="line">&#123;</span><br><span class="line">         pid_t nr &#x3D; 0;</span><br><span class="line">         if (pid)</span><br><span class="line">                   nr &#x3D; pid-&gt;numbers[0].nr;</span><br><span class="line">         return nr;</span><br><span class="line">&#125;</span><br><span class="line">pid_t pid_vnr(struct pid *pid)</span><br><span class="line">&#123;</span><br><span class="line">         return pid_nr_ns(pid, task_active_pid_ns(current));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>再来理解下vnr，回看前面命名空间的图，父空间的5和子空间的2对应于同一个struct pid实体，如果当前位于子空间，想要获得struct pid在子空间代表的数值pid，就需要调用pid_vnr或者task_xid_vnr。<br>把前面的find_pid_ns()（由数值pid和struct pid_namespace获取struct pid）和pid_task()（通过pid_type和struct pid可以找到task_struct）组合起来，内核提供了find_task_by_pid_ns()接口：由数值pid和struct pid_namespace获取到task_struct，pid_type为PIDTYPE_PID。还提供了find_task_by_vpid()，参数只有数值pid，命名空间由current算出。<br>这里再来回顾下pid_task()接口，前面说了它返回struct pid-&gt;tasks链表中第一个节点，假设这里传递的是PTYPE_PGID类型，数值为4，那么进程组id为4的进程本来就不止一个；但如果传递的是PTYPE_PID类型，是不是就只有一个了呢？（个人猜想），所以这里提供的find_task_xxx接口直接默认了pid_type是PTYPE_PID。在旧版的内核版本中，还提供了find_task_by_pid_type_ns，允许指定pid_tyoe，新版找不到这个接口了，是认为没有意义了吗？</p>
+<h2 id="生成唯一的PID"><a href="#生成唯一的PID" class="headerlink" title="生成唯一的PID"></a>生成唯一的PID</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line">kernel&#x2F;pid.c</span><br><span class="line">struct pid *alloc_pid(struct pid_namespace *ns)</span><br><span class="line">&#123;</span><br><span class="line">    struct pid *pid;</span><br><span class="line">    enum pid_type type;</span><br><span class="line">    int i, nr;</span><br><span class="line">    struct pid_namespace *tmp;</span><br><span class="line">    struct upid *upid;</span><br><span class="line">    ...</span><br><span class="line">    tmp &#x3D; ns;</span><br><span class="line">    for (i &#x3D; ns-&gt;level; i &gt;&#x3D; 0; i--) &#123;</span><br><span class="line">        nr &#x3D; alloc_pidmap(tmp);</span><br><span class="line">        ...</span><br><span class="line">        pid-&gt;numbers[i].nr &#x3D; nr;</span><br><span class="line">        pid-&gt;numbers[i].ns &#x3D; tmp;</span><br><span class="line">        tmp &#x3D; tmp-&gt;parent;</span><br><span class="line">    &#125;</span><br><span class="line">    pid-&gt;level &#x3D; ns-&gt;level;</span><br><span class="line">    ...</span><br><span class="line"></span><br><span class="line">    for (i &#x3D; ns-&gt;level; i &gt;&#x3D; 0; i--) &#123;</span><br><span class="line">        upid &#x3D; &amp;pid-&gt;numbers[i];</span><br><span class="line">        hlist_add_head_rcu(&amp;upid-&gt;pid_chain,</span><br><span class="line">        &amp;pid_hash[pid_hashfn(upid-&gt;nr, upid-&gt;ns)]);</span><br><span class="line">    &#125;</span><br><span class="line">    ...</span><br><span class="line">    </span><br><span class="line">    return pid;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>1 pid_namespace有一个成员叫pid_map，他用位图的方式记录了PID的分配情况，已分配的PID对应的位为1，分配新PID时就是找位为0的是第几位。分配和释放PID由alloc_pidmap()和free_pidmap()方法提供。<br>2 从当前命名空间开始，依次向上遍历所有的命名空间，在各个命名空间分配数值ID，并更新对应的struct pid-&gt;numbers数组，把数值ID存在数组元素，同时把他的指针指向命名空间。<br>3 更新pid-&gt;level。<br>4 把struct pid的numbers数组加入到pid_hash进行管理。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2020/05/31/LeetCode/" rel="prev" title="LeetCode">
+      <i class="fa fa-chevron-left"></i> LeetCode
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2020/05/31/Linux%E8%AE%BE%E5%A4%87%E6%A8%A1%E5%9E%8B%E4%B9%8Buevent%E7%AE%80%E4%BB%8B/" rel="next" title="Linux设备模型之uevent简介">
+      Linux设备模型之uevent简介 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let { activeClass } = CONFIG.comments;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#生成唯一的PID"><span class="nav-number">1.</span> <span class="nav-text">生成唯一的PID</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">myh</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">9</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">5</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2020</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">myh</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> & <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

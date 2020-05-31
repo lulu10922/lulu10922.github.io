@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.2.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+<link rel="stylesheet" href="//fonts.googleapis.com/css?family=Monda:300,300italic,400,400italic,700,700italic|Roboto Slab:300,300italic,400,400italic,700,700italic&display=swap&subset=latin,latin-ext">
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"yoursite.com","root":"/","scheme":"Pisces","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="BatteryService介绍BatteryService主要作用是监听底层battery状态变化，获取最新的battery信息。本文对此流程做个总结梳理。   1 BatteryService注册监听代码路径： 1frameworks&#x2F;base&#x2F;services&#x2F;core&#x2F;java&#x2F;com&#x2F;android&#x2F;server&amp;#x">
+<meta property="og:type" content="article">
+<meta property="og:title" content="BatteryService介绍">
+<meta property="og:url" content="http://yoursite.com/2020/05/31/BatteryService%E4%BB%8B%E7%BB%8D/index.html">
+<meta property="og:site_name" content="MyBlog">
+<meta property="og:description" content="BatteryService介绍BatteryService主要作用是监听底层battery状态变化，获取最新的battery信息。本文对此流程做个总结梳理。   1 BatteryService注册监听代码路径： 1frameworks&#x2F;base&#x2F;services&#x2F;core&#x2F;java&#x2F;com&#x2F;android&#x2F;server&amp;#x">
+<meta property="og:image" content="https://source.android.com/devices/tech/health/images/health-component-2.png">
+<meta property="og:image" content="https://pic-1302206658.cos.ap-shanghai.myqcloud.com/BS_register.png">
+<meta property="og:image" content="https://pic-1302206658.cos.ap-shanghai.myqcloud.com/BS_callback.png">
+<meta property="og:image" content="https://pic-1302206658.cos.ap-shanghai.myqcloud.com/service.png">
+<meta property="og:image" content="https://pic-1302206658.cos.ap-shanghai.myqcloud.com/battery_prop.png">
+<meta property="og:image" content="https://pic-1302206658.cos.ap-shanghai.myqcloud.com/20200526175240.png">
+<meta property="og:image" content="https://pic-1302206658.cos.ap-shanghai.myqcloud.com/1590486822398.png">
+<meta property="og:image" content="https://pic-1302206658.cos.ap-shanghai.myqcloud.com/powersupply_class.png">
+<meta property="article:published_time" content="2020-05-31T03:14:04.000Z">
+<meta property="article:modified_time" content="2020-05-31T03:30:36.434Z">
+<meta property="article:author" content="myh">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://source.android.com/devices/tech/health/images/health-component-2.png">
+
+<link rel="canonical" href="http://yoursite.com/2020/05/31/BatteryService%E4%BB%8B%E7%BB%8D/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome : false,
+    isPost : true,
+    lang   : 'zh-Hans'
+  };
+</script>
+
+  <title>BatteryService介绍 | MyBlog</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <h1 class="site-title">MyBlog</h1>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+    </div>
+  </div>
+</div>
+
+
+
+
+<nav class="site-nav">
+  <ul id="menu" class="main-menu menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a>
+
+  </li>
+  </ul>
+</nav>
+
+
+
+
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content post posts-expand">
+            
+
+    
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-Hans">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2020/05/31/BatteryService%E4%BB%8B%E7%BB%8D/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="myh">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="MyBlog">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          BatteryService介绍
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2020-05-31 11:14:04 / 修改时间：11:30:36" itemprop="dateCreated datePublished" datetime="2020-05-31T11:14:04+08:00">2020-05-31</time>
+            </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-folder"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Android/" itemprop="url" rel="index"><span itemprop="name">Android</span></a>
+                </span>
+                  ，
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Android/Power/" itemprop="url" rel="index"><span itemprop="name">Power</span></a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h1 id="BatteryService介绍"><a href="#BatteryService介绍" class="headerlink" title="BatteryService介绍"></a>BatteryService介绍</h1><p>BatteryService主要作用是监听底层battery状态变化，获取最新的battery信息。本文对此流程做个总结梳理。</p>
+<img src="https://source.android.com/devices/tech/health/images/health-component-2.png"/>
+
+<h2 id="1-BatteryService注册监听"><a href="#1-BatteryService注册监听" class="headerlink" title="1 BatteryService注册监听"></a>1 BatteryService注册监听</h2><p>代码路径：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">frameworks&#x2F;base&#x2F;services&#x2F;core&#x2F;java&#x2F;com&#x2F;android&#x2F;server&#x2F;BatteryService.java</span><br></pre></td></tr></table></figure>
+
+<p>先来看下BatteryService生命周期中的onStart()方法</p>
+<h3 id="1-1-onStart"><a href="#1-1-onStart" class="headerlink" title="1.1 onStart"></a>1.1 onStart</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">onStart</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    registerHealthCallback(); <span class="comment">/*向healthd注册回调*/</span></span><br><span class="line"></span><br><span class="line">    mBinderService = <span class="keyword">new</span> BinderService();</span><br><span class="line">    publishBinderService(<span class="string">"battery"</span>, mBinderService);</span><br><span class="line">    mBatteryPropertiesRegistrar = <span class="keyword">new</span> BatteryPropertiesRegistrar();</span><br><span class="line">    publishBinderService(<span class="string">"batteryproperties"</span>, mBatteryPropertiesRegistrar);</span><br><span class="line">    publishLocalService(BatteryManagerInternal<span class="class">.<span class="keyword">class</span>, <span class="title">new</span> <span class="title">LocalService</span>())</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>除了注册回调，还向servicemanager注册了两个service：battery和batteryproperties，batteryproperties是提供给BatteryManager获取battery属性的，这两个service实现的功能比较简单，这里就不展开了。</p>
+<h3 id="1-2-registerHealthCallback"><a href="#1-2-registerHealthCallback" class="headerlink" title="1.2 registerHealthCallback"></a>1.2 registerHealthCallback</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><span class="line">  <span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">registerHealthCallback</span><span class="params">()</span> </span>&#123;</span><br><span class="line">      traceBegin(<span class="string">"HealthInitWrapper"</span>);</span><br><span class="line">      mHealthServiceWrapper = <span class="keyword">new</span> HealthServiceWrapper();<span class="comment">/*在该类的init方法注册hal回调，详见1.3*/</span></span><br><span class="line">      mHealthHalCallback = <span class="keyword">new</span> HealthHalCallback(); <span class="comment">/*继承自IHealthInfoCallback.Stub，用于hal回调framework。*/</span></span><br><span class="line">      <span class="comment">// IHealth is lazily retrieved.</span></span><br><span class="line">      <span class="keyword">try</span> &#123;</span><br><span class="line">      	<span class="comment">/*1.3*/</span></span><br><span class="line">          mHealthServiceWrapper.init(mHealthHalCallback,</span><br><span class="line">                  <span class="keyword">new</span> HealthServiceWrapper.IServiceManagerSupplier() &#123;&#125;,</span><br><span class="line">                  <span class="keyword">new</span> HealthServiceWrapper.IHealthSupplier() &#123;&#125;);</span><br><span class="line">      &#125; <span class="keyword">catch</span> (RemoteException ex) &#123;</span><br><span class="line">          Slog.e(TAG, <span class="string">"health: cannot register callback. (RemoteException)"</span>);</span><br><span class="line">          <span class="keyword">throw</span> ex.rethrowFromSystemServer();</span><br><span class="line">      &#125; <span class="keyword">catch</span> (NoSuchElementException ex) &#123;</span><br><span class="line">          Slog.e(TAG, <span class="string">"health: cannot register callback. (no supported health HAL service)"</span>);</span><br><span class="line">          <span class="keyword">throw</span> ex;</span><br><span class="line">      &#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">          traceEnd();</span><br><span class="line">      &#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">/*注册hal回调成功后，会主动触发一次hal层的update，回调回来后，更新mHealthInfo，下面是等待该过程执行完毕*/</span></span><br><span class="line">      traceBegin(<span class="string">"HealthInitWaitUpdate"</span>);</span><br><span class="line">      <span class="comment">// init register for new service notifications, and IServiceManager should return the</span></span><br><span class="line">      <span class="comment">// existing service in a near future. Wait for this.update() to instantiate</span></span><br><span class="line">      <span class="comment">// the initial mHealthInfo.</span></span><br><span class="line">      <span class="keyword">long</span> beforeWait = SystemClock.uptimeMillis();</span><br><span class="line">      <span class="keyword">synchronized</span> (mLock) &#123;</span><br><span class="line">          <span class="keyword">while</span> (mHealthInfo == <span class="keyword">null</span>) &#123;</span><br><span class="line">              Slog.i(TAG, <span class="string">"health: Waited "</span> + (SystemClock.uptimeMillis() - beforeWait) +</span><br><span class="line">                      <span class="string">"ms for callbacks. Waiting another "</span> + HEALTH_HAL_WAIT_MS + <span class="string">" ms..."</span>);</span><br><span class="line">              <span class="keyword">try</span> &#123;</span><br><span class="line">                  mLock.wait(HEALTH_HAL_WAIT_MS);</span><br><span class="line">              &#125; <span class="keyword">catch</span> (InterruptedException ex) &#123;</span><br><span class="line">                  Slog.i(TAG, <span class="string">"health: InterruptedException when waiting for update. "</span></span><br><span class="line">                      + <span class="string">" Continuing..."</span>);</span><br><span class="line">              &#125;</span><br><span class="line">          &#125;</span><br><span class="line">      &#125;</span><br><span class="line"></span><br><span class="line">      Slog.i(TAG, <span class="string">"health: Waited "</span> + (SystemClock.uptimeMillis() - beforeWait)</span><br><span class="line">              + <span class="string">"ms and received the update."</span>);</span><br><span class="line">      traceEnd();</span><br><span class="line">  &#125;</span><br></pre></td></tr></table></figure>
+
+<p>IHealthSupplier()用于获取hal service。</p>
+<h3 id="1-3-HealthServiceWrapper-init"><a href="#1-3-HealthServiceWrapper-init" class="headerlink" title="1.3 HealthServiceWrapper.init"></a>1.3 HealthServiceWrapper.init</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">init</span><span class="params">(Callback callback,</span></span></span><br><span class="line"><span class="function"><span class="params">          IServiceManagerSupplier managerSupplier,</span></span></span><br><span class="line"><span class="function"><span class="params">          IHealthSupplier healthSupplier)</span></span></span><br><span class="line"><span class="function">        <span class="keyword">throws</span> RemoteException, NoSuchElementException, NullPointerException </span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (callback == <span class="keyword">null</span> || managerSupplier == <span class="keyword">null</span> || healthSupplier == <span class="keyword">null</span>)</span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> NullPointerException();</span><br><span class="line"></span><br><span class="line">    IServiceManager manager;</span><br><span class="line"></span><br><span class="line">    mCallback = callback;</span><br><span class="line">    mHealthSupplier = healthSupplier;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Initialize mLastService and call callback for the first time (in init thread)</span></span><br><span class="line">    IHealth newService = <span class="keyword">null</span>;</span><br><span class="line">    <span class="comment">/*从hwservicemanager获取hal service，service的名字与底层注册时相关。这里尝试用"default"和"backup"去获取。底层注册的是"default"*/</span></span><br><span class="line">    <span class="keyword">for</span> (String name : sAllInstances) &#123;</span><br><span class="line">        traceBegin(<span class="string">"HealthInitGetService_"</span> + name);</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            newService = healthSupplier.get(name);</span><br><span class="line">        &#125; <span class="keyword">catch</span> (NoSuchElementException ex) &#123;</span><br><span class="line">            <span class="comment">/* ignored, handled below */</span></span><br><span class="line">        &#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">            traceEnd();</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> (newService != <span class="keyword">null</span>) &#123;</span><br><span class="line">            mInstanceName = name;</span><br><span class="line">            mLastService.set(newService);<span class="comment">/*把hal service保存在mLastService*/</span></span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (mInstanceName == <span class="keyword">null</span> || newService == <span class="keyword">null</span>) &#123;</span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> NoSuchElementException(String.format(</span><br><span class="line">                <span class="string">"No IHealth service instance among %s is available. Perhaps no permission?"</span>,</span><br><span class="line">                sAllInstances.toString()));</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">/*这里会调用hal service的注册回调的接口完成注册，具体实现见1.4*/</span></span><br><span class="line">    mCallback.onRegistration(<span class="keyword">null</span>, newService, mInstanceName);</span><br><span class="line"></span><br><span class="line">    /....../</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="1-4-HealthHalCallback-onRegistration"><a href="#1-4-HealthHalCallback-onRegistration" class="headerlink" title="1.4 HealthHalCallback.onRegistration"></a>1.4 HealthHalCallback.onRegistration</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line">     <span class="meta">@Override</span> <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">onRegistration</span><span class="params">(IHealth oldService, IHealth newService,</span></span></span><br><span class="line"><span class="function"><span class="params">             String instance)</span> </span>&#123;</span><br><span class="line">/....../</span><br><span class="line">         traceBegin(<span class="string">"HealthRegisterCallback"</span>);</span><br><span class="line">         <span class="keyword">try</span> &#123;</span><br><span class="line">             <span class="keyword">int</span> r = newService.registerCallback(<span class="keyword">this</span>);</span><br><span class="line">             <span class="keyword">if</span> (r != Result.SUCCESS) &#123;</span><br><span class="line">                 Slog.w(TAG, <span class="string">"health: cannot register callback: "</span> + Result.toString(r));</span><br><span class="line">                 <span class="keyword">return</span>;</span><br><span class="line">             &#125;</span><br><span class="line">             <span class="comment">// registerCallback does NOT guarantee that update is called</span></span><br><span class="line">             <span class="comment">// immediately, so request a manual update here.</span></span><br><span class="line">             <span class="comment">/*这就是1.2中说的主动调用hal service的update方法，调用该方法最终会携带healthinfo回调回Batteryservice，hal service的update方法还会被内核uevent触发和定时触发，具体后面会进行介绍*/</span></span><br><span class="line">             newService.update();</span><br><span class="line">         &#125; <span class="keyword">catch</span> (RemoteException ex) &#123;</span><br><span class="line">             Slog.e(TAG, <span class="string">"health: cannot register callback (transaction error): "</span></span><br><span class="line">                     + ex.getMessage());</span><br><span class="line">         &#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">             traceEnd();</span><br><span class="line">         &#125;</span><br><span class="line">     &#125;</span><br><span class="line"> &#125;</span><br></pre></td></tr></table></figure>
+
+<p>HealthHalCallback实现了HealthServiceWrapper.Callback，同时继承自IHealthInfoCallback.Stub，所以在调用hal的registerCallback方法时，参数传递的是自己。继承自IHealthInfoCallback.Stub需要实现healthInfoChanged接口：</p>
+<h3 id="1-5-IHealthInfoCallback-Stub-healthInfoChanged"><a href="#1-5-IHealthInfoCallback-Stub-healthInfoChanged" class="headerlink" title="1.5 IHealthInfoCallback.Stub.healthInfoChanged"></a>1.5 IHealthInfoCallback.Stub.healthInfoChanged</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span> <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">healthInfoChanged</span><span class="params">(android.hardware.health.V2_0.HealthInfo props)</span> </span>&#123;</span><br><span class="line">    BatteryService.<span class="keyword">this</span>.update(props);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>传递了hal的类型HealthInfo，调用BatteryService的update方法。</p>
+<h3 id="1-6-update"><a href="#1-6-update" class="headerlink" title="1.6 update"></a>1.6 update</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">update</span><span class="params">(android.hardware.health.V2_0.HealthInfo info)</span> </span>&#123;</span><br><span class="line">    traceBegin(<span class="string">"HealthInfoUpdate"</span>);</span><br><span class="line"></span><br><span class="line">    Trace.traceCounter(Trace.TRACE_TAG_POWER, <span class="string">"BatteryChargeCounter"</span>,</span><br><span class="line">            info.legacy.batteryChargeCounter);</span><br><span class="line">    Trace.traceCounter(Trace.TRACE_TAG_POWER, <span class="string">"BatteryCurrent"</span>,</span><br><span class="line">            info.legacy.batteryCurrent);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">synchronized</span> (mLock) &#123;</span><br><span class="line">        <span class="keyword">if</span> (!mUpdatesStopped) &#123;</span><br><span class="line">            mHealthInfo = info.legacy;</span><br><span class="line">            <span class="comment">// Process the new values.</span></span><br><span class="line">            processValuesLocked(<span class="keyword">false</span>);</span><br><span class="line">            mLock.notifyAll(); <span class="comment">// for any waiters on new info</span></span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            copy(mLastHealthInfo, info.legacy);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    traceEnd();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>processValuesLocked()主要是更新BatteryService中的成员变量，不再赘述。</p>
+<img src="https://pic-1302206658.cos.ap-shanghai.myqcloud.com/BS_register.png"/>
+
+<img src="https://pic-1302206658.cos.ap-shanghai.myqcloud.com/BS_callback.png"/>
+
+<p>上面是前面代码的时序图，缺失了Health.cpp的update()到handleInfoChanged()的部分，下节介绍。</p>
+<h2 id="2-health-2-0"><a href="#2-health-2-0" class="headerlink" title="2 health@2.0"></a>2 <a href="mailto:health@2.0">health@2.0</a></h2><p>healthd是在旧版本中运行的守护进程，负责获取health相关信息并提供给framework。<a href="mailto:health@2.0">health@2.0</a>是android.hardware.health@2.0的缩写，指的是Android9中发布的health HIDL HAL 2.0版本。在最新的AOSP中已出现2.1版本的health HAL，但还没发布到release版本上。</p>
+<p>相关代码：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">hardware&#x2F;interfaces&#x2F;health&#x2F;2.0&#x2F;default&#x2F;Health.cpp</span><br><span class="line">hardware&#x2F;interfaces&#x2F;health&#x2F;2.0&#x2F;default&#x2F;healthd_common.cpp</span><br><span class="line">hardware&#x2F;interfaces&#x2F;health&#x2F;2.0&#x2F;utils&#x2F;libhealthservice&#x2F;HealthServiceCommon.cpp</span><br><span class="line">system&#x2F;core&#x2F;healthd&#x2F;BatteryMonitor.cpp</span><br><span class="line">device&#x2F;google&#x2F;coral&#x2F;health&#x2F;HealthService.cpp</span><br><span class="line">device&#x2F;google&#x2F;coral&#x2F;health&#x2F;android.hardware.health@2.0-service.coral.rc</span><br></pre></td></tr></table></figure>
+
+<h3 id="2-1-main"><a href="#2-1-main" class="headerlink" title="2.1 main"></a>2.1 main</h3><p>device/google/coral/health/android.hardware.health@2.0-service.coral.rc把service拉起来，对应的Android.bp:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line">cc_binary &#123;</span><br><span class="line">    name: &quot;android.hardware.health@2.0-service.coral&quot;,</span><br><span class="line">    init_rc: [&quot;android.hardware.health@2.0-service.coral.rc&quot;],</span><br><span class="line">    proprietary: true,</span><br><span class="line">    relative_install_path: &quot;hw&quot;,</span><br><span class="line">    srcs: [</span><br><span class="line">        &quot;HealthService.cpp&quot;,</span><br><span class="line">    ],</span><br><span class="line">    &#x2F;*......*&#x2F;</span><br><span class="line">    static_libs: [</span><br><span class="line">        &quot;android.hardware.health@2.0-impl&quot;,</span><br><span class="line">        &quot;android.hardware.health@1.0-convert&quot;,</span><br><span class="line">        &quot;libhealthservice&quot;,</span><br><span class="line">        &quot;libbatterymonitor&quot;,</span><br><span class="line">    ],</span><br><span class="line"></span><br><span class="line">    shared_libs: [</span><br><span class="line">        &quot;android.hardware.health@2.0&quot;,</span><br><span class="line">    ],</span><br><span class="line">    &#x2F;*......*&#x2F;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>源码是HealthService.cpp，同时依赖于多个其他目录生成的静态和动态库。入口是HealthService.cpp的main函数：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/*device/google/coral/health/HealthService.cpp*/</span></span><br><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> health_service_main();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>在设备上可以看到该service：</p>
+<img src="https://pic-1302206658.cos.ap-shanghai.myqcloud.com/service.png"/>
+
+<p>这部分是vendor-specific的，可以参考hardware/interfaces/health/2.0/README.md</p>
+<h3 id="2-2-health-service-main"><a href="#2-2-health-service-main" class="headerlink" title="2.2 health_service_main"></a>2.2 health_service_main</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/*hardware/interfaces/health/2.0/utils/libhealthservice/HealthServiceCommon.cpp*/</span></span><br><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">health_service_main</span><span class="params">(<span class="keyword">const</span> <span class="keyword">char</span>* instance)</span> </span>&#123;</span><br><span class="line">    gInstanceName = instance; <span class="comment">/*传空，默认为null*/</span></span><br><span class="line">    <span class="keyword">if</span> (gInstanceName.empty()) &#123;</span><br><span class="line">        gInstanceName = <span class="string">"default"</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    healthd_mode_ops = &amp;healthd_mode_service_2_0_ops;<span class="comment">/*这个变量定义在health_commom.cpp，会经常回调这个ops中的方法*/</span></span><br><span class="line">    LOG(INFO) &lt;&lt; LOG_TAG &lt;&lt; gInstanceName &lt;&lt; <span class="string">": Hal starting main loop..."</span>;</span><br><span class="line">    <span class="keyword">return</span> healthd_main(); <span class="comment">/*见2.3*/</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这个文件被编译为静态库libhealthservice，具体见相应的Android.bp。主要工作是给health_commom.cpp中的healthd_mode_ops变量赋值，然后调用它的healthd_main()方法。</p>
+<h3 id="2-3-healthd-main"><a href="#2-3-healthd-main" class="headerlink" title="2.3 healthd_main"></a>2.3 healthd_main</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/*hardware/interfaces/health/2.0/default/healthd_common.cpp*/</span></span><br><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">healthd_main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="keyword">int</span> ret;</span><br><span class="line"></span><br><span class="line">    klog_set_level(KLOG_LEVEL);</span><br><span class="line"></span><br><span class="line">	<span class="comment">/*调用该方法前，要把healthd_mode_ops初始化*/</span></span><br><span class="line">    <span class="keyword">if</span> (!healthd_mode_ops) &#123;</span><br><span class="line">        KLOG_ERROR(<span class="string">"healthd ops not set, exiting\n"</span>);</span><br><span class="line">        exit(<span class="number">1</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    ret = healthd_init();<span class="comment">/*2.4*/</span></span><br><span class="line">    <span class="keyword">if</span> (ret) &#123;</span><br><span class="line">        KLOG_ERROR(<span class="string">"Initialization failed, exiting\n"</span>);</span><br><span class="line">        exit(<span class="number">2</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    healthd_mainloop();<span class="comment">/*2.5*/</span></span><br><span class="line">    KLOG_ERROR(<span class="string">"Main loop terminated, exiting\n"</span>);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">3</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="2-4-healthd-init"><a href="#2-4-healthd-init" class="headerlink" title="2.4 healthd_init"></a>2.4 healthd_init</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/*hardware/interfaces/health/2.0/default/healthd_common.cpp*/</span></span><br><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">int</span> <span class="title">healthd_init</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    epollfd = epoll_create1(EPOLL_CLOEXEC);</span><br><span class="line">    <span class="keyword">if</span> (epollfd == -<span class="number">1</span>) &#123;</span><br><span class="line">        KLOG_ERROR(LOG_TAG, <span class="string">"epoll_create1 failed; errno=%d\n"</span>, errno);</span><br><span class="line">        <span class="keyword">return</span> -<span class="number">1</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    healthd_mode_ops-&gt;init(&amp;healthd_config); <span class="comment">/*2.4.1*/</span></span><br><span class="line">    wakealarm_init(); <span class="comment">/*2.4.2*/</span></span><br><span class="line">    uevent_init(); <span class="comment">/*2.4.3*/</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="2-4-1-healthd-mode-service-2-0-init"><a href="#2-4-1-healthd-mode-service-2-0-init" class="headerlink" title="2.4.1 healthd_mode_service_2_0_init"></a>2.4.1 healthd_mode_service_2_0_init</h4><p>2.2中注册了healthd_mode_ops,所以这里调用的是HealthServiceCommon.cpp中的healthd_mode_service_2_0_init：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">healthd_mode_service_2_0_init</span><span class="params">(struct healthd_config* config)</span> </span>&#123;</span><br><span class="line">    LOG(INFO) &lt;&lt; LOG_TAG &lt;&lt; gInstanceName &lt;&lt; <span class="string">" Hal is starting up..."</span>;</span><br><span class="line"></span><br><span class="line">    gBinderFd = setupTransportPolling();</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (gBinderFd &gt;= <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="keyword">if</span> (healthd_register_event(gBinderFd, binder_event))</span><br><span class="line">            LOG(ERROR) &lt;&lt; LOG_TAG &lt;&lt; gInstanceName &lt;&lt; <span class="string">": Register for binder events failed"</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    android::sp&lt;IHealth&gt; service = Health::initInstance(config);</span><br><span class="line">    CHECK_EQ(service-&gt;registerAsService(gInstanceName), android::OK)</span><br><span class="line">        &lt;&lt; LOG_TAG &lt;&lt; gInstanceName &lt;&lt; <span class="string">": Failed to register HAL"</span>;</span><br><span class="line"></span><br><span class="line">    LOG(INFO) &lt;&lt; LOG_TAG &lt;&lt; gInstanceName &lt;&lt; <span class="string">": Hal init done"</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>1 setupTransportPolling()定义于system/libhidl/transport/HidlBinderSupport.cpp，gBinderFd即hwbinder驱动fd。</p>
+<p>2</p>
+<h5 id="healthd-register-event"><a href="#healthd-register-event" class="headerlink" title="healthd_register_event()"></a>healthd_register_event()</h5><p>把一个文件描述符加入到epoll进行监听，epoll_event是对应的监听事件，这里关心的是EPOLLIN，即文件描述符可读，同时传递一个handler指针给epoll_event.dta.ptr，这样事件发生后就知道该如何处理了。关于epoll的使用可以查看相关文档。healthd_register_event()注册的文件描述符会在2.5中loop开启后进行监听，2.4.2和2.4.3加入了另外两个需要监听的文件描述符。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">healthd_register_event</span><span class="params">(<span class="keyword">int</span> fd, <span class="keyword">void</span> (*handler)</span><span class="params">(uint32_t)</span>, EventWakeup wakeup) </span>&#123;</span><br><span class="line">    struct epoll_event ev;</span><br><span class="line"></span><br><span class="line">    ev.events = EPOLLIN;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (wakeup == EVENT_WAKEUP_FD) ev.events |= EPOLLWAKEUP;</span><br><span class="line"></span><br><span class="line">    ev.data.ptr = (<span class="keyword">void</span>*)handler;</span><br><span class="line">    <span class="comment">/*epollfd是epoll实体，在2.4中创建的，2.5使用epoll_wait开始监听加入的文件描述符*/</span></span><br><span class="line">    <span class="keyword">if</span> (epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &amp;ev) == -<span class="number">1</span>) &#123;</span><br><span class="line">        KLOG_ERROR(LOG_TAG, <span class="string">"epoll_ctl failed; errno=%d\n"</span>, errno);</span><br><span class="line">        <span class="keyword">return</span> -<span class="number">1</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    eventct++;</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>3</p>
+<h5 id="Health-initInstance"><a href="#Health-initInstance" class="headerlink" title="Health::initInstance()"></a>Health::initInstance()</h5><p>这个接口只是new了Health实例，直接看构造函数：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">Health::Health(struct healthd_config* c) &#123;</span><br><span class="line">    <span class="comment">// TODO(b/69268160): remove when libhealthd is removed.</span></span><br><span class="line">    healthd_board_init(c);</span><br><span class="line">    battery_monitor_ = std::make_unique&lt;BatteryMonitor&gt;();</span><br><span class="line">    battery_monitor_-&gt;init(c);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这里又创建了BatteryMonitor实例，在2.6回调中会用到它。</p>
+<h5 id="BatteryMonitor-init"><a href="#BatteryMonitor-init" class="headerlink" title="BatteryMonitor.init()"></a>BatteryMonitor.init()</h5><p>初始化了成员变量：struct healthd_config *mHealthdConfig，这里保存了各个属性读取路径。截取一段battery的路径：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">case</span> ANDROID_POWER_SUPPLY_TYPE_BATTERY:</span><br><span class="line">    mBatteryDevicePresent = <span class="keyword">true</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (mHealthdConfig-&gt;batteryStatusPath.isEmpty()) &#123;</span><br><span class="line">        path.clear();</span><br><span class="line">        path.appendFormat(<span class="string">"%s/%s/status"</span>, POWER_SUPPLY_SYSFS_PATH,</span><br><span class="line">                          name);</span><br><span class="line">        <span class="keyword">if</span> (access(path, R_OK) == <span class="number">0</span>)</span><br><span class="line">            mHealthdConfig-&gt;batteryStatusPath = path;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (mHealthdConfig-&gt;batteryHealthPath.isEmpty()) &#123;</span><br><span class="line">        path.clear();</span><br><span class="line">        path.appendFormat(<span class="string">"%s/%s/health"</span>, POWER_SUPPLY_SYSFS_PATH,</span><br><span class="line">                          name);</span><br><span class="line">        <span class="keyword">if</span> (access(path, R_OK) == <span class="number">0</span>)</span><br><span class="line">            mHealthdConfig-&gt;batteryHealthPath = path;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (mHealthdConfig-&gt;batteryPresentPath.isEmpty()) &#123;</span><br><span class="line">        path.clear();</span><br><span class="line">        path.appendFormat(<span class="string">"%s/%s/present"</span>, POWER_SUPPLY_SYSFS_PATH,</span><br><span class="line">                          name);</span><br><span class="line">        <span class="keyword">if</span> (access(path, R_OK) == <span class="number">0</span>)</span><br><span class="line">            mHealthdConfig-&gt;batteryPresentPath = path;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (mHealthdConfig-&gt;batteryCapacityPath.isEmpty()) &#123;</span><br><span class="line">        path.clear();</span><br><span class="line">        path.appendFormat(<span class="string">"%s/%s/capacity"</span>, POWER_SUPPLY_SYSFS_PATH,</span><br><span class="line">                          name);</span><br><span class="line">        <span class="keyword">if</span> (access(path, R_OK) == <span class="number">0</span>)</span><br><span class="line">            mHealthdConfig-&gt;batteryCapacityPath = path;</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+
+<img src="https://pic-1302206658.cos.ap-shanghai.myqcloud.com/battery_prop.png"/>
+
+<p>2.6回调中会用到以上路径</p>
+<p>4 registerAsService()，把IHealth注册到hwservicemanager，注册的名字为”default”，上层1.3中使用IHealth.getService()方法获取到该服务（c++客户端使用IHealth::getService()）。</p>
+<h4 id="2-4-2-wakealarm-init"><a href="#2-4-2-wakealarm-init" class="headerlink" title="2.4.2 wakealarm_init"></a>2.4.2 wakealarm_init</h4><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">void</span> <span class="title">wakealarm_init</span><span class="params">(<span class="keyword">void</span>)</span> </span>&#123;</span><br><span class="line">    wakealarm_fd = timerfd_create(CLOCK_BOOTTIME_ALARM, TFD_NONBLOCK);</span><br><span class="line">    <span class="keyword">if</span> (wakealarm_fd == -<span class="number">1</span>) &#123;</span><br><span class="line">        KLOG_ERROR(LOG_TAG, <span class="string">"wakealarm_init: timerfd_create failed\n"</span>);</span><br><span class="line">        <span class="keyword">return</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (healthd_register_event(wakealarm_fd, wakealarm_event, EVENT_WAKEUP_FD))</span><br><span class="line">        KLOG_ERROR(LOG_TAG, <span class="string">"Registration of wakealarm event failed\n"</span>);</span><br><span class="line"></span><br><span class="line">    wakealarm_set_interval(healthd_config.periodic_chores_interval_fast);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>timerfd是linux提供的一组系统调用，用于创建和设置定时器，具体参数含义可以参考linux手册，简单的说就是创建了一个定时器，后面wakealarm_set_interval调用timerfd设置时间的系统调用。超时后，会唤醒系统，调用healthd_register_event传进去的handler：wakealarm_event。</p>
+<p>这里的作用是定时上报电池信息，默认为1分钟。</p>
+<h4 id="2-4-3-uevent-init"><a href="#2-4-3-uevent-init" class="headerlink" title="2.4.3 uevent_init"></a>2.4.3 uevent_init</h4><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">void</span> <span class="title">uevent_init</span><span class="params">(<span class="keyword">void</span>)</span> </span>&#123;</span><br><span class="line">    uevent_fd = uevent_open_socket(<span class="number">64</span> * <span class="number">1024</span>, <span class="keyword">true</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (uevent_fd &lt; <span class="number">0</span>) &#123;</span><br><span class="line">        KLOG_ERROR(LOG_TAG, <span class="string">"uevent_init: uevent_open_socket failed\n"</span>);</span><br><span class="line">        <span class="keyword">return</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    fcntl(uevent_fd, F_SETFL, O_NONBLOCK);</span><br><span class="line">    <span class="keyword">if</span> (healthd_register_event(uevent_fd, uevent_event, EVENT_WAKEUP_FD))</span><br><span class="line">        KLOG_ERROR(LOG_TAG, <span class="string">"register for uevent events failed\n"</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这里创建监听kernel uevent事件的套接字，绑定netlink socket，底层通过netlink socket上报uevent的流程见另外一篇文章，这里只需要知道，当底层驱动发送事件时，这里的uevent_fd就变得可读，进而回调使用healthd_register_event注册的uevent_event接口。</p>
+<h3 id="2-5-healthd-mainloop"><a href="#2-5-healthd-mainloop" class="headerlink" title="2.5 healthd_mainloop"></a>2.5 healthd_mainloop</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">void</span> <span class="title">healthd_mainloop</span><span class="params">(<span class="keyword">void</span>)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">int</span> nevents = <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">while</span> (<span class="number">1</span>) &#123;</span><br><span class="line">        struct epoll_event events[eventct];</span><br><span class="line">        <span class="keyword">int</span> timeout = awake_poll_interval;</span><br><span class="line">        <span class="keyword">int</span> mode_timeout;</span><br><span class="line">		<span class="comment">/*第一次不等待，直接调用periodic_chores（为什么？）,wakealarm_event调用的也是它*/</span></span><br><span class="line">        <span class="comment">/* Don't wait for first timer timeout to run periodic chores */</span></span><br><span class="line">        <span class="keyword">if</span> (!nevents) periodic_chores();</span><br><span class="line"></span><br><span class="line">        healthd_mode_ops-&gt;heartbeat();</span><br><span class="line"></span><br><span class="line">        mode_timeout = healthd_mode_ops-&gt;preparetowait();</span><br><span class="line">        <span class="keyword">if</span> (timeout &lt; <span class="number">0</span> || (mode_timeout &gt; <span class="number">0</span> &amp;&amp; mode_timeout &lt; timeout)) timeout = mode_timeout;</span><br><span class="line">        <span class="comment">/*开始等待2.4.1-2.4.3添加的文件描述符*/</span></span><br><span class="line">        nevents = epoll_wait(epollfd, events, eventct, timeout);</span><br><span class="line">        <span class="keyword">if</span> (nevents == -<span class="number">1</span>) &#123;</span><br><span class="line">            <span class="keyword">if</span> (errno == EINTR) <span class="keyword">continue</span>;</span><br><span class="line">            KLOG_ERROR(LOG_TAG, <span class="string">"healthd_mainloop: epoll_wait failed\n"</span>);</span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">        &#125;</span><br><span class="line">		<span class="comment">/*调用相应的处理函数*/</span></span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">int</span> n = <span class="number">0</span>; n &lt; nevents; ++n) &#123;</span><br><span class="line">            <span class="keyword">if</span> (events[n].data.ptr) (*(<span class="keyword">void</span> (*)(<span class="keyword">int</span>))events[n].data.ptr)(events[n].events);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>以上流程对应的时序图如下：</p>
+<img src="https://pic-1302206658.cos.ap-shanghai.myqcloud.com/20200526175240.png"/>
+
+<h3 id="2-6-回调"><a href="#2-6-回调" class="headerlink" title="2.6 回调"></a>2.6 回调</h3><p>文件描述符可读后的流程就不再贴代码了，就是绕来绕去，最终回调到1.5：</p>
+<img src="https://pic-1302206658.cos.ap-shanghai.myqcloud.com/1590486822398.png"/>
+
+<p>1 uevent和wakelarm最终都是调用Health.cpp的update()。uevent在调用前会做个过滤，只有uevent（字符串）中包含相应关键字的才是health相关的：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">while</span> (*cp) &#123;</span><br><span class="line">	<span class="comment">/*POWER_SUPPLY_SUBSYSTEM = power_supply*/</span></span><br><span class="line">    <span class="keyword">if</span> (!strcmp(cp, <span class="string">"SUBSYSTEM="</span> POWER_SUPPLY_SUBSYSTEM)) &#123;</span><br><span class="line">        healthd_battery_update();</span><br><span class="line">        <span class="keyword">break</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* advance to after the next \0 */</span></span><br><span class="line">    <span class="keyword">while</span> (*cp++)</span><br><span class="line">        ;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>设备驱动中有一个名为power_supply的class，sysfs目录也有对应的class：</p>
+<img src="https://pic-1302206658.cos.ap-shanghai.myqcloud.com/powersupply_class.png"/>
+
+<p>这部分就是监测电量变化电池温度等，属于驱动部分了。</p>
+<p>2 Health.cpp的update()转而去调用BatteryMonitor.cpp的update()，在这里通过读取文件的方式完成过对电池属性收集，文件路径的初始化见2.4.1。然后转换成HealthInfo结构体后，由Health.cpp调用注册的callback把该信息传给framework。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2020/05/31/Android-Hal%E5%AD%A6%E4%B9%A0/" rel="prev" title="JobScheduler源码分析">
+      <i class="fa fa-chevron-left"></i> JobScheduler源码分析
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2020/05/31/Android-Power-debug%E4%BB%8B%E7%BB%8D/" rel="next" title="Android Power debug介绍">
+      Android Power debug介绍 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let { activeClass } = CONFIG.comments;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#BatteryService介绍"><span class="nav-number">1.</span> <span class="nav-text">BatteryService介绍</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-BatteryService注册监听"><span class="nav-number">1.1.</span> <span class="nav-text">1 BatteryService注册监听</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#1-1-onStart"><span class="nav-number">1.1.1.</span> <span class="nav-text">1.1 onStart</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#1-2-registerHealthCallback"><span class="nav-number">1.1.2.</span> <span class="nav-text">1.2 registerHealthCallback</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#1-3-HealthServiceWrapper-init"><span class="nav-number">1.1.3.</span> <span class="nav-text">1.3 HealthServiceWrapper.init</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#1-4-HealthHalCallback-onRegistration"><span class="nav-number">1.1.4.</span> <span class="nav-text">1.4 HealthHalCallback.onRegistration</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#1-5-IHealthInfoCallback-Stub-healthInfoChanged"><span class="nav-number">1.1.5.</span> <span class="nav-text">1.5 IHealthInfoCallback.Stub.healthInfoChanged</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#1-6-update"><span class="nav-number">1.1.6.</span> <span class="nav-text">1.6 update</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-health-2-0"><span class="nav-number">1.2.</span> <span class="nav-text">2 health@2.0</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#2-1-main"><span class="nav-number">1.2.1.</span> <span class="nav-text">2.1 main</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#2-2-health-service-main"><span class="nav-number">1.2.2.</span> <span class="nav-text">2.2 health_service_main</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#2-3-healthd-main"><span class="nav-number">1.2.3.</span> <span class="nav-text">2.3 healthd_main</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#2-4-healthd-init"><span class="nav-number">1.2.4.</span> <span class="nav-text">2.4 healthd_init</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#2-4-1-healthd-mode-service-2-0-init"><span class="nav-number">1.2.4.1.</span> <span class="nav-text">2.4.1 healthd_mode_service_2_0_init</span></a><ol class="nav-child"><li class="nav-item nav-level-5"><a class="nav-link" href="#healthd-register-event"><span class="nav-number">1.2.4.1.1.</span> <span class="nav-text">healthd_register_event()</span></a></li><li class="nav-item nav-level-5"><a class="nav-link" href="#Health-initInstance"><span class="nav-number">1.2.4.1.2.</span> <span class="nav-text">Health::initInstance()</span></a></li><li class="nav-item nav-level-5"><a class="nav-link" href="#BatteryMonitor-init"><span class="nav-number">1.2.4.1.3.</span> <span class="nav-text">BatteryMonitor.init()</span></a></li></ol></li><li class="nav-item nav-level-4"><a class="nav-link" href="#2-4-2-wakealarm-init"><span class="nav-number">1.2.4.2.</span> <span class="nav-text">2.4.2 wakealarm_init</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#2-4-3-uevent-init"><span class="nav-number">1.2.4.3.</span> <span class="nav-text">2.4.3 uevent_init</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#2-5-healthd-mainloop"><span class="nav-number">1.2.5.</span> <span class="nav-text">2.5 healthd_mainloop</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#2-6-回调"><span class="nav-number">1.2.6.</span> <span class="nav-text">2.6 回调</span></a></li></ol></li></ol></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">myh</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">9</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">5</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2020</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">myh</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> & <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

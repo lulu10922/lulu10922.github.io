@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.2.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+<link rel="stylesheet" href="//fonts.googleapis.com/css?family=Monda:300,300italic,400,400italic,700,700italic|Roboto Slab:300,300italic,400,400italic,700,700italic&display=swap&subset=latin,latin-ext">
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"yoursite.com","root":"/","scheme":"Pisces","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="Linux设备模型之uevent简介1 Kobjectkobject： 123456789101112131415161718&lt;include&#x2F;linux&#x2F;kobject.h&gt;struct kobject &amp;#123;	const char		*name;	struct list_head	entry;	struct kobject		*parent;	struct">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Linux设备模型之uevent简介">
+<meta property="og:url" content="http://yoursite.com/2020/05/31/Linux%E8%AE%BE%E5%A4%87%E6%A8%A1%E5%9E%8B%E4%B9%8Buevent%E7%AE%80%E4%BB%8B/index.html">
+<meta property="og:site_name" content="MyBlog">
+<meta property="og:description" content="Linux设备模型之uevent简介1 Kobjectkobject： 123456789101112131415161718&lt;include&#x2F;linux&#x2F;kobject.h&gt;struct kobject &amp;#123;	const char		*name;	struct list_head	entry;	struct kobject		*parent;	struct">
+<meta property="og:image" content="https://pic-1302206658.cos.ap-shanghai.myqcloud.com/kset.png">
+<meta property="og:image" content="https://pic-1302206658.cos.ap-shanghai.myqcloud.com/uevent_env.png">
+<meta property="og:image" content="https://pic-1302206658.cos.ap-shanghai.myqcloud.com/android_uevent.png">
+<meta property="article:published_time" content="2020-05-31T02:51:31.000Z">
+<meta property="article:modified_time" content="2020-05-31T02:57:23.634Z">
+<meta property="article:author" content="myh">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://pic-1302206658.cos.ap-shanghai.myqcloud.com/kset.png">
+
+<link rel="canonical" href="http://yoursite.com/2020/05/31/Linux%E8%AE%BE%E5%A4%87%E6%A8%A1%E5%9E%8B%E4%B9%8Buevent%E7%AE%80%E4%BB%8B/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome : false,
+    isPost : true,
+    lang   : 'zh-Hans'
+  };
+</script>
+
+  <title>Linux设备模型之uevent简介 | MyBlog</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <h1 class="site-title">MyBlog</h1>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+    </div>
+  </div>
+</div>
+
+
+
+
+<nav class="site-nav">
+  <ul id="menu" class="main-menu menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a>
+
+  </li>
+  </ul>
+</nav>
+
+
+
+
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content post posts-expand">
+            
+
+    
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-Hans">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2020/05/31/Linux%E8%AE%BE%E5%A4%87%E6%A8%A1%E5%9E%8B%E4%B9%8Buevent%E7%AE%80%E4%BB%8B/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="myh">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="MyBlog">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Linux设备模型之uevent简介
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2020-05-31 10:51:31 / 修改时间：10:57:23" itemprop="dateCreated datePublished" datetime="2020-05-31T10:51:31+08:00">2020-05-31</time>
+            </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-folder"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Linux/" itemprop="url" rel="index"><span itemprop="name">Linux</span></a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h2 id="Linux设备模型之uevent简介"><a href="#Linux设备模型之uevent简介" class="headerlink" title="Linux设备模型之uevent简介"></a>Linux设备模型之uevent简介</h2><h3 id="1-Kobject"><a href="#1-Kobject" class="headerlink" title="1 Kobject"></a>1 Kobject</h3><p><strong>kobject</strong>：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line">&lt;include&#x2F;linux&#x2F;kobject.h&gt;</span><br><span class="line">struct kobject &#123;</span><br><span class="line">	const char		*name;</span><br><span class="line">	struct list_head	entry;</span><br><span class="line">	struct kobject		*parent;</span><br><span class="line">	struct kset		*kset;</span><br><span class="line">	struct kobj_type	*ktype;</span><br><span class="line">	struct kernfs_node	*sd; &#x2F;* sysfs directory entry *&#x2F;</span><br><span class="line">	struct kref		kref;</span><br><span class="line">#ifdef CONFIG_DEBUG_KOBJECT_RELEASE</span><br><span class="line">	struct delayed_work	release;</span><br><span class="line">#endif</span><br><span class="line">	unsigned int state_initialized:1;</span><br><span class="line">	unsigned int state_in_sysfs:1;</span><br><span class="line">	unsigned int state_add_uevent_sent:1;</span><br><span class="line">	unsigned int state_remove_uevent_sent:1;</span><br><span class="line">	unsigned int uevent_suppress:1;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>每个kobject都会在“/sys/”文件系统中以目录的形式出现。</p>
+<p><strong>kset</strong>：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">&lt;include&#x2F;linux&#x2F;kobject.h&gt;</span><br><span class="line">struct kset &#123;</span><br><span class="line">	struct list_head list;</span><br><span class="line">	spinlock_t list_lock;</span><br><span class="line">	struct kobject kobj;</span><br><span class="line">	const struct kset_uevent_ops *uevent_ops;</span><br><span class="line">&#125; __randomize_layout;</span><br></pre></td></tr></table></figure>
+
+<p>kset是一个特殊的kobject，也会在“/sys/”文件系统中以目录的形式出现。</p>
+<p><strong>ktype</strong>：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">&lt;include&#x2F;linux&#x2F;kobject.h&gt;</span><br><span class="line">struct kobj_type &#123;</span><br><span class="line">	void (*release)(struct kobject *kobj);</span><br><span class="line">	const struct sysfs_ops *sysfs_ops;</span><br><span class="line">	struct attribute **default_attrs;</span><br><span class="line">	const struct kobj_ns_type_operations *(*child_ns_type)(struct kobject *kobj);</span><br><span class="line">	const void *(*namespace)(struct kobject *kobj);</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>release：通过该函数，释放kobject的内存空间，或者是包含kobject的数据结构的内存空间，这时应该由它来提供release函数的实现。</p>
+<img src="https://pic-1302206658.cos.ap-shanghai.myqcloud.com/kset.png"/>
+
+<h3 id="2-uevent"><a href="#2-uevent" class="headerlink" title="2 uevent"></a>2 uevent</h3><p>前面kset结构体中struct kset_uevent_ops是和uevent相关的操作：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">&lt;include&#x2F;linux&#x2F;kobject.h&gt;</span><br><span class="line">struct kset_uevent_ops &#123;</span><br><span class="line">	int (* const filter)(struct kset *kset, struct kobject *kobj);</span><br><span class="line">	const char *(* const name)(struct kset *kset, struct kobject *kobj);</span><br><span class="line">	int (* const uevent)(struct kset *kset, struct kobject *kobj,</span><br><span class="line">		      struct kobj_uevent_env *env);</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>filter：当任何kobject需要上报uevent时，它所属的kset可以通过该接口过滤，阻止不希望上报的event。</p>
+<p>name：返回kset的名称。如果kset没有合法名称，则其下的所有kobject不允许上报uevent。</p>
+<p>uevent：当任何kobject需要上报uevent时，它所属的kset可以通过该接口为这些event统一添加环境变量。</p>
+<p>lib/kobject_uevent.c提供上报uevent的接口为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">&#x2F;**</span><br><span class="line"> * kobject_uevent - notify userspace by sending an uevent</span><br><span class="line"> * ...</span><br><span class="line"> *&#x2F;</span><br><span class="line">int kobject_uevent(struct kobject *kobj, enum kobject_action action)</span><br><span class="line">&#123;</span><br><span class="line">	return kobject_uevent_env(kobj, action, NULL);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>kobject_uevent_env()的实现比较长，它主要做了：</p>
+<ul>
+<li>kobj本身或其parent是否从属于某个kset，如果不是，报错返回。</li>
+<li>kobj-&gt;uevent_suppress是否为真，为真则忽略所有的uevent并返回。</li>
+<li>如果所属kset的kset_uevent_ops不为空且filter函数存在，则使用该函数判断该uevent是否要过滤。</li>
+<li>如果所属kset的kset_uevent_ops不为空且name函数存在，则调用该函数获取字符串subsystem的值；否则，kset-&gt;kobj的名字作为subsystem。subsystem不允许为空，否则返回。</li>
+<li>分配环境变量struct kobj_uevent_env *env，关于struct kobj_uevent_env的内容如后图所示。</li>
+<li>获取该kobject在sysfs中的路径，保存在devpath，如果为空，报错返回。</li>
+<li>调用<code>add_uevent_var()</code>接口，把action 类型，devpath，subsystem，接口传进来的envp_ext（如果有）格式化到env buffer中。</li>
+<li>更新kobject中状态位信息。</li>
+<li>获取SEQNUM，并格式化到env buffer中。</li>
+<li>如果定义了CONFIG_NET，最终调用<code>netlink_broadcast_filtered()</code>接口，通过netlink socket广播netlink message。</li>
+<li>kernel也可以调用<code>call_usermodehelper_exec()</code>，它把uevent扩展为一个进程，并为每个进程提供环境变量，调用用户空间的可执行文件，简称uevent helper。CONFIG_UEVENT_HELPER_PATH指定了uevent helper的路径。用户控件可以通过把helper路径写入”/sys/kernel/uevent_helper”来指定它的路径。</li>
+</ul>
+<img src="https://pic-1302206658.cos.ap-shanghai.myqcloud.com/uevent_env.png"/>
+
+<h3 id="3-Android-uevent"><a href="#3-Android-uevent" class="headerlink" title="3 Android uevent"></a>3 Android uevent</h3><p>从第2部分，我们知道，kernel会通过netlink socket发送uevent消息。Android提供了UEventObserver类来完成这个工作，我们来看一下它的使用和原理。UEventObserver是一个hide的抽象类，使用时需要重写它的onEvent()方法，framework层的BatteryService，HeadsetObserver等都有用到：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">&#x2F;*services&#x2F;java&#x2F;com&#x2F;android&#x2F;server&#x2F;BatteryService.java*&#x2F;</span><br><span class="line">        &#x2F;&#x2F; watch for invalid charger messages if the invalid_charger switch exists</span><br><span class="line">        if (new File(&quot;&#x2F;sys&#x2F;devices&#x2F;virtual&#x2F;switch&#x2F;invalid_charger&#x2F;state&quot;).exists()) &#123;</span><br><span class="line">            UEventObserver invalidChargerObserver &#x3D; new UEventObserver() &#123;</span><br><span class="line">                @Override</span><br><span class="line">                public void onUEvent(UEvent event) &#123;</span><br><span class="line">                    final int invalidCharger &#x3D; &quot;1&quot;.equals(event.get(&quot;SWITCH_STATE&quot;)) ? 1 : 0;</span><br><span class="line">                    synchronized (mLock) &#123;</span><br><span class="line">                        if (mInvalidCharger !&#x3D; invalidCharger) &#123;</span><br><span class="line">                            mInvalidCharger &#x3D; invalidCharger;</span><br><span class="line">                        &#125;</span><br><span class="line">                    &#125;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;;</span><br><span class="line">            invalidChargerObserver.startObserving(</span><br><span class="line">                    &quot;DEVPATH&#x3D;&#x2F;devices&#x2F;virtual&#x2F;switch&#x2F;invalid_charger&quot;);</span><br><span class="line">        &#125;</span><br></pre></td></tr></table></figure>
+
+<p>使用比较简单，重写onUEvent()，调用startObserving(）方法即可，调用时，需要传递一个字符串，这个是底层用来检测收到的event是否match观察者的需求。</p>
+<h4 id="3-1-startObserving"><a href="#3-1-startObserving" class="headerlink" title="3.1 startObserving"></a>3.1 startObserving</h4><p>每个UEventObserver对应一个线程，首次调用startObserving(）时，启动线程，并调用native方法添加前面的传下来的匹配字符串：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">&#x2F;*frameworks&#x2F;base&#x2F;core&#x2F;java&#x2F;android&#x2F;os*&#x2F;</span><br><span class="line">public final void startObserving(String match) &#123;</span><br><span class="line">    if (match &#x3D;&#x3D; null || match.isEmpty()) &#123;</span><br><span class="line">        throw new IllegalArgumentException(&quot;match substring must be non-empty&quot;);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    final UEventThread t &#x3D; getThread();</span><br><span class="line">    t.addObserver(match, this);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">&#x2F;*frameworks&#x2F;base&#x2F;core&#x2F;java&#x2F;android&#x2F;os*&#x2F;</span><br><span class="line">public void addObserver(String match, UEventObserver observer) &#123;</span><br><span class="line">          synchronized (mKeysAndObservers) &#123;</span><br><span class="line">              mKeysAndObservers.add(match);</span><br><span class="line">              mKeysAndObservers.add(observer);</span><br><span class="line">              nativeAddMatch(match); &#x2F;*参考3.3*&#x2F;</span><br><span class="line">          &#125;</span><br><span class="line">      &#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="3-2-run"><a href="#3-2-run" class="headerlink" title="3.2 run"></a>3.2 run</h4><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">public void run() &#123;</span><br><span class="line">    nativeSetup(); &#x2F;*做一些初始化，见3.5*&#x2F;</span><br><span class="line"></span><br><span class="line">    while (true) &#123;</span><br><span class="line">        String message &#x3D; nativeWaitForNextEvent();</span><br><span class="line">        if (message !&#x3D; null) &#123;</span><br><span class="line">            if (DEBUG) &#123;</span><br><span class="line">                Log.d(TAG, message);</span><br><span class="line">            &#125;</span><br><span class="line">            sendEvent(message);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>在启动的线程中调用<code>nativeWaitForNextEvent()</code>（参考3.4）接收event，收到message且不为空后调用<code>sendEvent()</code>方法分发给observer。</p>
+<h4 id="3-3-nativeAddMatch"><a href="#3-3-nativeAddMatch" class="headerlink" title="3.3 nativeAddMatch"></a>3.3 nativeAddMatch</h4><p>接下来看下native方法：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">&#x2F;*frameworks&#x2F;base&#x2F;core&#x2F;jni&#x2F;android_os_UEventObserver.cpp*&#x2F;</span><br><span class="line">static void nativeAddMatch(JNIEnv* env, jclass clazz, jstring matchStr) &#123;</span><br><span class="line">    ScopedUtfChars match(env, matchStr);</span><br><span class="line"></span><br><span class="line">    AutoMutex _l(gMatchesMutex);</span><br><span class="line">    gMatches.add(String8(match.c_str()));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>简单的把传下来的match字符串加入gMatches。</p>
+<h4 id="3-4-nativeWaitForNextEvent"><a href="#3-4-nativeWaitForNextEvent" class="headerlink" title="3.4 nativeWaitForNextEvent"></a>3.4 nativeWaitForNextEvent</h4><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line">&#x2F;*frameworks&#x2F;base&#x2F;core&#x2F;jni&#x2F;android_os_UEventObserver.cpp*&#x2F;</span><br><span class="line">static jstring nativeWaitForNextEvent(JNIEnv *env, jclass clazz) &#123;</span><br><span class="line">    char buffer[1024];</span><br><span class="line"></span><br><span class="line">    for (;;) &#123;</span><br><span class="line">        int length &#x3D; uevent_next_event(buffer, sizeof(buffer) - 1);</span><br><span class="line">        if (length &lt;&#x3D; 0) &#123;</span><br><span class="line">            return NULL;</span><br><span class="line">        &#125;</span><br><span class="line">        buffer[length] &#x3D; &#39;\0&#39;;</span><br><span class="line"></span><br><span class="line">        ALOGV(&quot;Received uevent message: %s&quot;, buffer);</span><br><span class="line"></span><br><span class="line">        if (isMatch(buffer, length)) &#123;</span><br><span class="line">            &#x2F;&#x2F; Assume the message is ASCII.</span><br><span class="line">            jchar message[length];</span><br><span class="line">            for (int i &#x3D; 0; i &lt; length; i++) &#123;</span><br><span class="line">                message[i] &#x3D; buffer[i];</span><br><span class="line">            &#125;</span><br><span class="line">            return env-&gt;NewString(message, length);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>继续调用uevent_next_event()去接收uevent，收到后根据gMatches进行过滤，然后返回。3.2的接口就收到返回消息并分发了。</p>
+<h4 id="3-5-nativeSetup"><a href="#3-5-nativeSetup" class="headerlink" title="3.5 nativeSetup"></a>3.5 nativeSetup</h4><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">static void nativeSetup(JNIEnv *env, jclass clazz) &#123;</span><br><span class="line">    if (!uevent_init()) &#123;</span><br><span class="line">        jniThrowException(env, &quot;java&#x2F;lang&#x2F;RuntimeException&quot;,</span><br><span class="line">                &quot;Unable to open socket for UEventObserver&quot;);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>直接调用uevent_init()。</p>
+<p>3.3-3.5是native部分，这部分基本上只做过滤工作，初始化和收事件都交给了hardware/libhardware_legacy/uevent.c。</p>
+<h4 id="3-6-uevent-init"><a href="#3-6-uevent-init" class="headerlink" title="3.6 uevent_init"></a>3.6 uevent_init</h4><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line">int uevent_init()</span><br><span class="line">&#123;</span><br><span class="line">    struct sockaddr_nl addr;</span><br><span class="line">    int sz &#x3D; 64*1024;</span><br><span class="line">    int s;</span><br><span class="line"></span><br><span class="line">    memset(&amp;addr, 0, sizeof(addr));</span><br><span class="line">    addr.nl_family &#x3D; AF_NETLINK;</span><br><span class="line">    addr.nl_pid &#x3D; getpid();</span><br><span class="line">    addr.nl_groups &#x3D; 0xffffffff;</span><br><span class="line"></span><br><span class="line">    s &#x3D; socket(PF_NETLINK, SOCK_DGRAM, NETLINK_KOBJECT_UEVENT);</span><br><span class="line">    if(s &lt; 0)</span><br><span class="line">        return 0;</span><br><span class="line"></span><br><span class="line">    setsockopt(s, SOL_SOCKET, SO_RCVBUFFORCE, &amp;sz, sizeof(sz));</span><br><span class="line"></span><br><span class="line">    if(bind(s, (struct sockaddr *) &amp;addr, sizeof(addr)) &lt; 0) &#123;</span><br><span class="line">        close(s);</span><br><span class="line">        return 0;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    fd &#x3D; s;</span><br><span class="line">    return (fd &gt; 0);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这里和3.7是用户空间接收netlink socket的关键了，创建套接字，绑定地址。</p>
+<h4 id="3-7-uevent-next-event"><a href="#3-7-uevent-next-event" class="headerlink" title="3.7 uevent_next_event"></a>3.7 uevent_next_event</h4><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line">int uevent_next_event(char* buffer, int buffer_length)</span><br><span class="line">&#123;</span><br><span class="line">    while (1) &#123;</span><br><span class="line">        struct pollfd fds;</span><br><span class="line">        int nr;</span><br><span class="line">    </span><br><span class="line">        fds.fd &#x3D; fd;</span><br><span class="line">        fds.events &#x3D; POLLIN;</span><br><span class="line">        fds.revents &#x3D; 0;</span><br><span class="line">        nr &#x3D; poll(&amp;fds, 1, -1);</span><br><span class="line">     </span><br><span class="line">        if(nr &gt; 0 &amp;&amp; (fds.revents &amp; POLLIN)) &#123;</span><br><span class="line">            int count &#x3D; recv(fd, buffer, buffer_length, 0);</span><br><span class="line">            if (count &gt; 0) &#123;</span><br><span class="line">                struct uevent_handler *h;</span><br><span class="line">                pthread_mutex_lock(&amp;uevent_handler_list_lock);</span><br><span class="line">                LIST_FOREACH(h, &amp;uevent_handler_list, list)</span><br><span class="line">                    h-&gt;handler(h-&gt;handler_data, buffer, buffer_length);</span><br><span class="line">                pthread_mutex_unlock(&amp;uevent_handler_list_lock);</span><br><span class="line"></span><br><span class="line">                return count;</span><br><span class="line">            &#125; </span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    &#x2F;&#x2F; won&#39;t get here</span><br><span class="line">    return 0;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>阻塞在初始化创建的套接字，知道收到uevent消息。</p>
+<p>整个过程可以用下图来概括：</p>
+<img src="https://pic-1302206658.cos.ap-shanghai.myqcloud.com/android_uevent.png"/>
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2020/05/31/%E8%BF%9B%E7%A8%8BID%E7%AE%A1%E7%90%86/" rel="prev" title="进程ID管理">
+      <i class="fa fa-chevron-left"></i> 进程ID管理
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2020/05/31/JobScheduler%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90/" rel="next" title="JobScheduler源码分析">
+      JobScheduler源码分析 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let { activeClass } = CONFIG.comments;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#Linux设备模型之uevent简介"><span class="nav-number">1.</span> <span class="nav-text">Linux设备模型之uevent简介</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#1-Kobject"><span class="nav-number">1.1.</span> <span class="nav-text">1 Kobject</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#2-uevent"><span class="nav-number">1.2.</span> <span class="nav-text">2 uevent</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#3-Android-uevent"><span class="nav-number">1.3.</span> <span class="nav-text">3 Android uevent</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#3-1-startObserving"><span class="nav-number">1.3.1.</span> <span class="nav-text">3.1 startObserving</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#3-2-run"><span class="nav-number">1.3.2.</span> <span class="nav-text">3.2 run</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#3-3-nativeAddMatch"><span class="nav-number">1.3.3.</span> <span class="nav-text">3.3 nativeAddMatch</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#3-4-nativeWaitForNextEvent"><span class="nav-number">1.3.4.</span> <span class="nav-text">3.4 nativeWaitForNextEvent</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#3-5-nativeSetup"><span class="nav-number">1.3.5.</span> <span class="nav-text">3.5 nativeSetup</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#3-6-uevent-init"><span class="nav-number">1.3.6.</span> <span class="nav-text">3.6 uevent_init</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#3-7-uevent-next-event"><span class="nav-number">1.3.7.</span> <span class="nav-text">3.7 uevent_next_event</span></a></li></ol></li></ol></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">myh</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">9</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">5</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2020</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">myh</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> & <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>
