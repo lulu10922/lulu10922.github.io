@@ -20,12 +20,12 @@
     var CONFIG = {"hostname":"yoursite.com","root":"/","scheme":"Pisces","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
   </script>
 
-  <meta name="description" content="BatteryService介绍BatteryService主要作用是监听底层battery状态变化，获取最新的battery信息。本文对此流程做个总结梳理。   1 BatteryService注册监听代码路径： 1frameworks&#x2F;base&#x2F;services&#x2F;core&#x2F;java&#x2F;com&#x2F;android&#x2F;server&amp;#x">
+  <meta name="description" content="BatteryService介绍BatteryService主要作用是监听底层battery状态变化，获取最新的battery信息。本文对此流程做个总结梳理。">
 <meta property="og:type" content="article">
 <meta property="og:title" content="BatteryService介绍">
 <meta property="og:url" content="http://yoursite.com/2020/05/31/BatteryService%E4%BB%8B%E7%BB%8D/index.html">
 <meta property="og:site_name" content="MyBlog">
-<meta property="og:description" content="BatteryService介绍BatteryService主要作用是监听底层battery状态变化，获取最新的battery信息。本文对此流程做个总结梳理。   1 BatteryService注册监听代码路径： 1frameworks&#x2F;base&#x2F;services&#x2F;core&#x2F;java&#x2F;com&#x2F;android&#x2F;server&amp;#x">
+<meta property="og:description" content="BatteryService介绍BatteryService主要作用是监听底层battery状态变化，获取最新的battery信息。本文对此流程做个总结梳理。">
 <meta property="og:image" content="https://source.android.com/devices/tech/health/images/health-component-2.png">
 <meta property="og:image" content="https://pic-1302206658.cos.ap-shanghai.myqcloud.com/BS_register.png">
 <meta property="og:image" content="https://pic-1302206658.cos.ap-shanghai.myqcloud.com/BS_callback.png">
@@ -35,7 +35,7 @@
 <meta property="og:image" content="https://pic-1302206658.cos.ap-shanghai.myqcloud.com/1590486822398.png">
 <meta property="og:image" content="https://pic-1302206658.cos.ap-shanghai.myqcloud.com/powersupply_class.png">
 <meta property="article:published_time" content="2020-05-31T03:14:04.000Z">
-<meta property="article:modified_time" content="2020-05-31T03:30:36.434Z">
+<meta property="article:modified_time" content="2020-05-31T10:09:15.001Z">
 <meta property="article:author" content="myh">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:image" content="https://source.android.com/devices/tech/health/images/health-component-2.png">
@@ -187,7 +187,7 @@
               <span class="post-meta-item-text">发表于</span>
               
 
-              <time title="创建时间：2020-05-31 11:14:04 / 修改时间：11:30:36" itemprop="dateCreated datePublished" datetime="2020-05-31T11:14:04+08:00">2020-05-31</time>
+              <time title="创建时间：2020-05-31 11:14:04 / 修改时间：18:09:15" itemprop="dateCreated datePublished" datetime="2020-05-31T11:14:04+08:00">2020-05-31</time>
             </span>
             <span class="post-meta-item">
               <span class="post-meta-item-icon">
@@ -216,6 +216,8 @@
       
         <h1 id="BatteryService介绍"><a href="#BatteryService介绍" class="headerlink" title="BatteryService介绍"></a>BatteryService介绍</h1><p>BatteryService主要作用是监听底层battery状态变化，获取最新的battery信息。本文对此流程做个总结梳理。</p>
 <img src="https://source.android.com/devices/tech/health/images/health-component-2.png"/>
+
+<a id="more"></a>
 
 <h2 id="1-BatteryService注册监听"><a href="#1-BatteryService注册监听" class="headerlink" title="1 BatteryService注册监听"></a>1 BatteryService注册监听</h2><p>代码路径：</p>
 <figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">frameworks&#x2F;base&#x2F;services&#x2F;core&#x2F;java&#x2F;com&#x2F;android&#x2F;server&#x2F;BatteryService.java</span><br></pre></td></tr></table></figure>

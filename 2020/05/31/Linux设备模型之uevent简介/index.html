@@ -30,7 +30,7 @@
 <meta property="og:image" content="https://pic-1302206658.cos.ap-shanghai.myqcloud.com/uevent_env.png">
 <meta property="og:image" content="https://pic-1302206658.cos.ap-shanghai.myqcloud.com/android_uevent.png">
 <meta property="article:published_time" content="2020-05-31T02:51:31.000Z">
-<meta property="article:modified_time" content="2020-05-31T02:57:23.634Z">
+<meta property="article:modified_time" content="2020-05-31T10:08:59.579Z">
 <meta property="article:author" content="myh">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:image" content="https://pic-1302206658.cos.ap-shanghai.myqcloud.com/kset.png">
@@ -182,7 +182,7 @@
               <span class="post-meta-item-text">发表于</span>
               
 
-              <time title="创建时间：2020-05-31 10:51:31 / 修改时间：10:57:23" itemprop="dateCreated datePublished" datetime="2020-05-31T10:51:31+08:00">2020-05-31</time>
+              <time title="创建时间：2020-05-31 10:51:31 / 修改时间：18:08:59" itemprop="dateCreated datePublished" datetime="2020-05-31T10:51:31+08:00">2020-05-31</time>
             </span>
             <span class="post-meta-item">
               <span class="post-meta-item-icon">
@@ -209,6 +209,8 @@
 <figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line">&lt;include&#x2F;linux&#x2F;kobject.h&gt;</span><br><span class="line">struct kobject &#123;</span><br><span class="line">	const char		*name;</span><br><span class="line">	struct list_head	entry;</span><br><span class="line">	struct kobject		*parent;</span><br><span class="line">	struct kset		*kset;</span><br><span class="line">	struct kobj_type	*ktype;</span><br><span class="line">	struct kernfs_node	*sd; &#x2F;* sysfs directory entry *&#x2F;</span><br><span class="line">	struct kref		kref;</span><br><span class="line">#ifdef CONFIG_DEBUG_KOBJECT_RELEASE</span><br><span class="line">	struct delayed_work	release;</span><br><span class="line">#endif</span><br><span class="line">	unsigned int state_initialized:1;</span><br><span class="line">	unsigned int state_in_sysfs:1;</span><br><span class="line">	unsigned int state_add_uevent_sent:1;</span><br><span class="line">	unsigned int state_remove_uevent_sent:1;</span><br><span class="line">	unsigned int uevent_suppress:1;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
 
 <p>每个kobject都会在“/sys/”文件系统中以目录的形式出现。</p>
+<a id="more"></a>
+
 <p><strong>kset</strong>：</p>
 <figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">&lt;include&#x2F;linux&#x2F;kobject.h&gt;</span><br><span class="line">struct kset &#123;</span><br><span class="line">	struct list_head list;</span><br><span class="line">	spinlock_t list_lock;</span><br><span class="line">	struct kobject kobj;</span><br><span class="line">	const struct kset_uevent_ops *uevent_ops;</span><br><span class="line">&#125; __randomize_layout;</span><br></pre></td></tr></table></figure>
 
